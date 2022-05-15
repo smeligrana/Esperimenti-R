@@ -1,9 +1,7 @@
 library(class)
 library(gmodels)
 library(rpart)
-
-# carico il csv degli esperimenti
-csv <- read.csv(file='C:/Users/Sergio/Desktop/uni/tesi/Alimentari - Capsule caffè - Foglio1.csv')
+library(randomForest)
 
 # Funzione di normalizzazione
 normalize <- function(x) {
@@ -21,21 +19,39 @@ string_to_number <- function(x){
   return(as.double(gsub(",", ".", x)))
 }
 
-# ciclo di creazione dataset, per ogni timestamp dell'esperimento prendo il primo elemento NON vincitore di buybox
-dates <- unique(csv$timestamp, incomparables = FALSE)
-data_not_buy_box <- NULL
-for (x in dates) {
-  a <- csv[csv$buy_box==0 & csv$timestamp==x, c('num_valutazioni', 'qta_min', 'valutazioni_positive', 'dif_prezzo', 'dif_prezzo_sped', 'dif_prezzo_tot', 'buy_box')]
-  data_not_buy_box <- rbind(data_not_buy_box, head(a,1))
+#funzione per estrazione dataset not buy box
+extract_not_buy_box <- function(csv){
+  # ciclo di creazione dataset, per ogni timestamp dell'esperimento prendo il primo elemento NON vincitore di buybox
+  dates <- unique(csv$timestamp, incomparables = FALSE)
+  data_not_buy_box <- NULL
+  for (x in dates) {
+    a <- csv[csv$buy_box==0 & csv$timestamp==x, c('num_valutazioni', 'qta_min', 'valutazioni_positive', 'dif_prezzo', 'dif_prezzo_sped', 'dif_prezzo_tot', 'buy_box', 'venduto_da')]
+    data_not_buy_box <- rbind(data_not_buy_box, head(a,1))
+  }
+  return(data_not_buy_box)
 }
 
+# carico il csv degli esperimenti
+csv_caffe <- read.csv(file='C:/Users/Sergio/Desktop/uni/tesi/R/Alimentari - Capsule caffè - Foglio1.csv')
+csv_agenda <- read.csv(file='C:/Users/Sergio/Desktop/uni/tesi/R/Ufficio - Agenda moleskine - Foglio1.csv')
+csv_lampadine <- read.csv(file='C:/Users/Sergio/Desktop/uni/tesi/R/Illuminazione - Lampadine Philips - Foglio1.csv')
+csv_sport <- read.csv(file='C:/Users/Sergio/Desktop/uni/tesi/R/Sport e tempo libero - Smartwatch - Xiaomi Mi Smart Band 6 - Foglio1.csv')
+
+
+data_not_buy_box = extract_not_buy_box(csv_caffe)
+data_not_buy_box <- rbind(data_not_buy_box, extract_not_buy_box(csv_agenda))
+data_not_buy_box <- rbind(data_not_buy_box, extract_not_buy_box(csv_lampadine))
+data_not_buy_box <- rbind(data_not_buy_box, extract_not_buy_box(csv_sport))
+
 # prendo i vincitori di buybox 1 per timestamp
-data_buy_box <- csv[csv$buy_box==1, c('num_valutazioni', 'qta_min', 'valutazioni_positive', 'dif_prezzo', 'dif_prezzo_sped', 'dif_prezzo_tot', 'buy_box')]
+data_buy_box_caffe <- csv_caffe[csv_caffe$buy_box==1, c('num_valutazioni', 'qta_min', 'valutazioni_positive', 'dif_prezzo', 'dif_prezzo_sped', 'dif_prezzo_tot', 'buy_box', 'venduto_da')]
+data_buy_box_agenda <- csv_caffe[csv_caffe$buy_box==1, c('num_valutazioni', 'qta_min', 'valutazioni_positive', 'dif_prezzo', 'dif_prezzo_sped', 'dif_prezzo_tot', 'buy_box', 'venduto_da')]
+data_buy_box_lampadine <- csv_lampadine[csv_lampadine$buy_box==1, c('num_valutazioni', 'qta_min', 'valutazioni_positive', 'dif_prezzo', 'dif_prezzo_sped', 'dif_prezzo_tot', 'buy_box', 'venduto_da')]
+data_buy_box_sport <- csv_sport[csv_sport$buy_box==1, c('num_valutazioni', 'qta_min', 'valutazioni_positive', 'dif_prezzo', 'dif_prezzo_sped', 'dif_prezzo_tot', 'buy_box', 'venduto_da')]
 
-#data_not_buy_box <- csv[csv$buy_box==0, c('num_valutazioni', 'qta_min', 'valutazioni_positive', 'dif_prezzo', 'dif_prezzo_sped', 'dif_prezzo_tot', 'buy_box')]
-#data_not_buy_box <- head(data_not_buy_box, nrow(data_buy_box));
+data_buy_box <- rbind(data_buy_box_caffe, data_buy_box_agenda, data_buy_box_lampadine,data_buy_box_sport)
 
-# unisco  i 2 dataframe per creare il mio dataset da usar eper il training e per il test
+# unisco  i 2 dataframe per creare il mio dataset da usare per il training e per il test
 data <- rbind(data_buy_box, data_not_buy_box)
 
 # converto im valori numerici le colonne che contengono numeri sotto forma di stringa
@@ -68,21 +84,34 @@ merge <- data.frame(data_pred, data.testLabels)
 # Verifica accuratezza modello
 mean(data_pred == data.testLabels)
 
-names(merge) <- c("Predicted", "Observed")
-merge
+#names(merge) <- c("Predicted", "Observed")
+#merge
 
-CrossTable(x = data.testLabels, y = data_pred, prop.chisq=FALSE)
+#CrossTable(x = data.testLabels, y = data_pred, prop.chisq=FALSE)
 
 # CART implementato in R da RPART 
 data.training <- data[ind==1, 1:7]
 data.test <- data[ind==2, 1:7]
 
-model1 <- rpart(buy_box ~., data = data.training, method = "class")
+cart_model <- rpart(buy_box ~., data = data.training, method = "class")
 
-plot(model1)
-text(model1, digits = 3)
+plot(cart_model)
+text(cart_model, digits = 3)
 
-predicted.classes <- predict(model1, data.test, type = "class")
+predicted.cart <- predict(cart_model, data.test, type = "class")
 
 # Verifica accuratezza modello
-mean(predicted.classes == data.test$buy_box)
+mean(predicted.cart == data.test$buy_box)
+
+
+#RANDOM FOREST
+data.training <- data[ind==1, 1:7]
+data.training$buy_box <- factor(data.training$buy_box)
+data.test <- data[ind==2, 1:7]
+
+randomforest_model <- randomForest(buy_box ~., data = data.training)
+randomforest_model
+predicted.randomforest <- predict(randomforest_model, data.test)
+
+mean(predicted.randomforest == data.test$buy_box)
+
