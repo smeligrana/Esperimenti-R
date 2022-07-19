@@ -3,9 +3,12 @@ library(gmodels)
 library(rpart)
 library(randomForest)
 library(e1071)
+library(caret)
+library(RKEEL)
+library(RWeka)
 
 # imposto un seed per il generatore di numeri casuali
-set.seed(1234)
+set.seed(9012)
 
 # Funzione di normalizzazione
 normalize <- function(x) { 
@@ -28,7 +31,8 @@ boolean_to_number <- function(x){
 }
 
 features <- c('num_valutazioni', 'qta_min', #'valutazioni_positive', 
-              'dif_prezzo', 'dif_prezzo_sped', 'dif_prezzo_tot', 'stelle', 'vend_amazon', 'delta_consegna', 'buy_box')
+              'dif_prezzo', 'dif_prezzo_sped', 'dif_prezzo_tot', 'stelle', 'vend_amazon', 
+              'delta_consegna', 'buy_box')
 
 #funzione per estrazione dataset not buy box
 extract_not_buy_box <- function(csv){
@@ -37,10 +41,10 @@ extract_not_buy_box <- function(csv){
   data_not_buy_box <- NULL
   for (x in dates) {
     a <- csv[csv$buy_box==0 & csv$timestamp==x, features]
-    randomRows <- sample(7, 3)
+    randomRows <- sample(7, 2)
     data_not_buy_box <- rbind(data_not_buy_box, a[randomRows[1],])
     data_not_buy_box <- rbind(data_not_buy_box, a[randomRows[2],])
-    data_not_buy_box <- rbind(data_not_buy_box, a[randomRows[3],])
+    #data_not_buy_box <- rbind(data_not_buy_box, a[randomRows[3],])
   }
   return(data_not_buy_box)
 }
@@ -85,13 +89,13 @@ data$dif_prezzo <- normalize(data$dif_prezzo)
 data$dif_prezzo_sped <-normalize(data$dif_prezzo_sped)
 data$dif_prezzo_tot <- normalize(data$dif_prezzo_tot)
 data$stelle <- normalize(data$stelle)
-data$vend_amazon <-normalize(data$vend_amazon)
+#data$vend_amazon <-normalize(data$vend_amazon)
 data$delta_consegna <- normalize(data$delta_consegna)
 
 
 
 # divido i dati nel sotto insieme di training e di test
-ind <- sample(2, nrow(data), replace=TRUE, prob=c(0.60, 0.40))
+ind <- sample(2, nrow(data), replace=TRUE, prob=c(1.00, 0.00))
 
 #data.training <- data[ind==1, 1:8]
 #data.trainLabels <- data[ind==1,9]
@@ -128,9 +132,9 @@ mean(predicted.cart == data.test$buy_box)
 
 
 #RANDOM FOREST
-data.training <- data[ind==1, 1:9]
+#data.training <- data[ind==1, 1:8]
 data.training$buy_box <- factor(data.training$buy_box)
-data.test <- data[ind==2, 1:9]
+#data.test <- data[ind==2, 1:8]
 
 randomforest_model <- randomForest(buy_box ~., data = data.training)
 randomforest_model
@@ -144,14 +148,33 @@ varImpPlot(randomforest_model, sort=T, n.var= 8, main= "", pch=16)
 
 
 #SVM
-svm.model <- svm(buy_box ~ num_valutazioni+vend_amazon, data = data.training, kernel = "linear", gamma = 1, cost = 1)
-summary(svm.model)
+#svm.model <- svm(buy_box ~ ., data = data.training, kernel = "linear", gamma = 1, cost = 1)
+#summary(svm.model)
+#svm.pred <- predict(svm.model, data.test)
+#cm <- table(pred = svm.pred, true = data.test$buy_box)
+#confusionMatrix(cm)
+
+#cat("\nEvaluation:\n\n")
+#accuracy = sum(svm.pred == data.test$buy_box)/length(data.training$buy_box)
+#precision = cm[1,1]/sum(cm[,1])
+#recall = cm[1,1]/sum(cm[1,])
+#f = 2 * (precision * recall) / (precision + recall)
+#cat(paste("Precision:\t", format(precision, digits=2), "\n",sep=" "))
+#cat(paste("Recall:\t\t", format(recall, digits=2), "\n",sep=" "))
+#cat(paste("F-measure:\t", format(f, digits=2), "\n",sep=" "))
 
 
-svm.pred <- predict(svm.model, data.test)
-plot(svm.model , data.training[, c('num_valutazioni','vend_amazon','buy_box')])
-plot( data.training$num_valutazioni, data.training$vend_amazon, lwd=3 )
 
-mean(svm.pred ==data.test$buy_box)
+#mean(svm.pred ==data.test$buy_box)
 
+#JRIP
+steam_ripper <- JRip(buy_box ~., data = data.training)
+steam_ripper
+summary(steam_ripper)
+predicted.ripper <- predict(steam_ripper, data.test)
+mean(predicted.ripper == data.test$buy_box)
+
+
+#steam_ripper <- RKEEL::Ripper_C(data.training, data.test)
+#steam_ripper$run()
 
