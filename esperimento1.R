@@ -6,9 +6,10 @@ library(e1071)
 library(caret)
 library(RKEEL)
 library(RWeka)
+library(dplyr)
 
 # imposto un seed per il generatore di numeri casuali
-set.seed(9012)
+set.seed(1234)
 
 # Funzione di normalizzazione
 normalize <- function(x) { 
@@ -30,9 +31,18 @@ boolean_to_number <- function(x){
   as.integer(as.logical(x))
 }
 
-features <- c('num_valutazioni', 'qta_min', #'valutazioni_positive', 
-              'dif_prezzo', 'dif_prezzo_sped', 'dif_prezzo_tot', 'stelle', 'vend_amazon', 
-              'delta_consegna', 'buy_box')
+features <- c('num_valutazioni', 
+              'qta_min', 
+              #'valutazioni_positive', 
+              'dif_prezzo', 
+              'dif_prezzo_sped', 
+              'dif_prezzo_tot', 
+              'stelle', 
+              'vend_amazon', 
+              'delta_consegna',
+              'g_spedizione',
+              'fba',
+              'buy_box')
 
 #funzione per estrazione dataset not buy box
 extract_not_buy_box <- function(csv){
@@ -41,21 +51,29 @@ extract_not_buy_box <- function(csv){
   data_not_buy_box <- NULL
   for (x in dates) {
     a <- csv[csv$buy_box==0 & csv$timestamp==x, features]
-    randomRows <- sample(7, 2)
+    a <-  head(a, 10)
+    
+    
+    randomRows <- sample(nrow(a), 2)
     data_not_buy_box <- rbind(data_not_buy_box, a[randomRows[1],])
     data_not_buy_box <- rbind(data_not_buy_box, a[randomRows[2],])
     #data_not_buy_box <- rbind(data_not_buy_box, a[randomRows[3],])
+    #data_not_buy_box <- rbind(data_not_buy_box, a[randomRows[4],])
   }
   return(data_not_buy_box)
 }
 
+
+
 setwd("C:/Users/Sergio/Desktop/uni/tesi/R/")
+
 
 # carico il csv degli esperimenti
 csv_caffe <- read.csv(file='Alimentari - Capsule caffè - Foglio1.csv')
 csv_agenda <- read.csv(file='Ufficio - Agenda moleskine - Foglio1.csv')
 csv_lampadine <- read.csv(file='Illuminazione - Lampadine Philips - Foglio1.csv')
 csv_sport <- read.csv(file='Sport e tempo libero - Smartwatch - Xiaomi Mi Smart Band 6 - Foglio1.csv')
+
 
 data_not_buy_box = extract_not_buy_box(csv_caffe)
 data_not_buy_box <- rbind(data_not_buy_box, extract_not_buy_box(csv_agenda))
@@ -70,6 +88,13 @@ data_buy_box_sport <- csv_sport[csv_sport$buy_box==1, features]
 
 data_buy_box <- rbind(data_buy_box_caffe, data_buy_box_agenda, data_buy_box_lampadine,data_buy_box_sport)
 
+#calcolo il rapporto la percentuale di vend_amazon tra i vincitri di buy_box
+data_buy_box_vend_amazon <- data_buy_box[data_buy_box$vend_amazon==TRUE, features]
+data_buy_box_fba <- data_buy_box[data_buy_box$fba==TRUE, features]
+
+nrow(data_buy_box_vend_amazon)/nrow(data_buy_box)
+nrow(data_buy_box_fba)/nrow(data_buy_box)
+
 # unisco  i 2 dataframe per creare il mio dataset da usare per il training e per il test
 data <- rbind(data_buy_box, data_not_buy_box)
 
@@ -83,7 +108,7 @@ data$stelle <-string_to_number(data$stelle)
 data$delta_consegna <- string_to_number(data$delta_consegna)
 
 # normalizzo i dati
-data$num_valutazioni <- normalize(data$num_valutazioni)
+#--data$num_valutazioni <- normalize(data$num_valutazioni)
 #data$valutazioni_positive <- unlist(lapply(data[3], normalize))
 data$dif_prezzo <- normalize(data$dif_prezzo)
 data$dif_prezzo_sped <-normalize(data$dif_prezzo_sped)
@@ -91,11 +116,12 @@ data$dif_prezzo_tot <- normalize(data$dif_prezzo_tot)
 data$stelle <- normalize(data$stelle)
 #data$vend_amazon <-normalize(data$vend_amazon)
 data$delta_consegna <- normalize(data$delta_consegna)
+data$g_spedizione <- normalize(data$g_spedizione)
 
 
 
 # divido i dati nel sotto insieme di training e di test
-ind <- sample(2, nrow(data), replace=TRUE, prob=c(1.00, 0.00))
+ind <- sample(2, nrow(data), replace=TRUE, prob=c(0.100, 0.00))
 
 #data.training <- data[ind==1, 1:8]
 #data.trainLabels <- data[ind==1,9]
@@ -116,14 +142,18 @@ ind <- sample(2, nrow(data), replace=TRUE, prob=c(1.00, 0.00))
 #CrossTable(x = data.testLabels, y = data_pred, prop.chisq=FALSE)
 
 # CART implementato in R da RPART 
-data.training <- data[ind==1, 1:9]
-data.test <- data[ind==2, 1:9]
+data.training <- data[ind==1, 1:length(features)]
+data.test <- data[ind==2, 1:length(features)]
 
 cart_model <- rpart(buy_box ~., data = data.training, method = "class")
 
 cart_model
-plot(cart_model)
-text(cart_model, digits = 3)
+plot(cart_model, uniform=TRUE,)
+text(cart_model, cex = 0.8, use.n = TRUE, xpd = TRUE)
+
+
+arrange(varImp(cart_model), desc(Overall))
+
 
 predicted.cart <- predict(cart_model, data.test, type = "class")
 
@@ -144,7 +174,9 @@ mean(predicted.randomforest == data.test$buy_box)
 
 importance(randomforest_model)
 
-varImpPlot(randomforest_model, sort=T, n.var= 8, main= "", pch=16)
+arrange(varImp(randomforest_model), desc(Overall))
+
+varImpPlot(randomforest_model, sort=T, n.var= length(features)-1, main= "", pch=16)
 
 
 #SVM
@@ -174,6 +206,7 @@ summary(steam_ripper)
 predicted.ripper <- predict(steam_ripper, data.test)
 mean(predicted.ripper == data.test$buy_box)
 
+arrange(varImp(steam_ripper), desc(Overall))
 
 #steam_ripper <- RKEEL::Ripper_C(data.training, data.test)
 #steam_ripper$run()
