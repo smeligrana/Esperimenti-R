@@ -9,7 +9,9 @@ library(RWeka)
 library(dplyr)
 
 # imposto un seed per il generatore di numeri casuali
-set.seed(1234)
+set.seed(901)
+# training / test
+prob=c(0.100, 0.0)
 
 # Funzione di normalizzazione
 normalize <- function(x) { 
@@ -108,7 +110,7 @@ data$stelle <-string_to_number(data$stelle)
 data$delta_consegna <- string_to_number(data$delta_consegna)
 
 # normalizzo i dati
-#--data$num_valutazioni <- normalize(data$num_valutazioni)
+data$num_valutazioni <- normalize(data$num_valutazioni)
 #data$valutazioni_positive <- unlist(lapply(data[3], normalize))
 data$dif_prezzo <- normalize(data$dif_prezzo)
 data$dif_prezzo_sped <-normalize(data$dif_prezzo_sped)
@@ -121,7 +123,7 @@ data$g_spedizione <- normalize(data$g_spedizione)
 
 
 # divido i dati nel sotto insieme di training e di test
-ind <- sample(2, nrow(data), replace=TRUE, prob=c(0.100, 0.00))
+ind <- sample(2, nrow(data), replace=TRUE, prob=prob)
 
 #data.training <- data[ind==1, 1:8]
 #data.trainLabels <- data[ind==1,9]
